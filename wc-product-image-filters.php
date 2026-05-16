@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WC Product Image Filters
  * Description: Add fixed CSS filters to selected WooCommerce product images with an Ajax product selector and live admin preview.
- * Version: 2.1.1
+ * Version: 2.1.2
  * Author: VelveTronic
  * Text Domain: wc-product-image-filters
  */
@@ -84,6 +84,7 @@ class WC_Product_Image_Filters {
                 'saturate'    => $this->sanitize_number($rule['saturate'] ?? 1, 0, 3, 1),
                 'grayscale'   => $this->sanitize_number($rule['grayscale'] ?? 0, 0, 1, 0),
                 'blur'        => $this->sanitize_number($rule['blur'] ?? 0, 0, 20, 0),
+                'main_image_only' => !empty($rule['main_image_only']) ? 1 : 0,
             ];
         }
 
@@ -194,6 +195,7 @@ class WC_Product_Image_Filters {
                 'saturate' => 1,
                 'grayscale' => 0,
                 'blur' => 0,
+                'main_image_only' => 0,
             ]];
         }
         ?>
@@ -214,6 +216,7 @@ class WC_Product_Image_Filters {
                             <th>Saturate</th>
                             <th>Grayscale</th>
                             <th>Blur px</th>
+                            <th style="width: 150px;">Scope</th>
                             <th style="width: 80px;">Action</th>
                         </tr>
                     </thead>
@@ -264,6 +267,13 @@ class WC_Product_Image_Filters {
                                 <td><input type="number" step="0.01" min="0" max="3" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][saturate]" value="<?php echo esc_attr($rule['saturate'] ?? 1); ?>" /></td>
                                 <td><input type="number" step="0.01" min="0" max="1" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][grayscale]" value="<?php echo esc_attr($rule['grayscale'] ?? 0); ?>" /></td>
                                 <td><input type="number" step="0.1" min="0" max="20" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][blur]" value="<?php echo esc_attr($rule['blur'] ?? 0); ?>" /></td>
+                                <td>
+                                    <label class="wcpif-checkbox-label">
+                                        <input type="checkbox" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][main_image_only]" value="1" <?php checked(!empty($rule['main_image_only'])); ?> />
+                                        Main image only
+                                    </label>
+                                    <p class="description">Skip single product gallery images.</p>
+                                </td>
                                 <td><button type="button" class="button wcpif-remove-rule">Remove</button></td>
                             </tr>
                         <?php endforeach; ?>
@@ -305,6 +315,13 @@ class WC_Product_Image_Filters {
 
             #wcpif-rules-table input[type="number"] {
                 width: 100px;
+            }
+
+            .wcpif-checkbox-label {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 4px;
             }
 
             .wcpif-product-control,
@@ -697,6 +714,13 @@ class WC_Product_Image_Filters {
                     <td><input type="number" step="0.01" min="0" max="3" name="${optionKey}[${i}][saturate]" value="1" /></td>
                     <td><input type="number" step="0.01" min="0" max="1" name="${optionKey}[${i}][grayscale]" value="0" /></td>
                     <td><input type="number" step="0.1" min="0" max="20" name="${optionKey}[${i}][blur]" value="0" /></td>
+                    <td>
+                        <label class="wcpif-checkbox-label">
+                            <input type="checkbox" name="${optionKey}[${i}][main_image_only]" value="1" />
+                            Main image only
+                        </label>
+                        <p class="description">Skip single product gallery images.</p>
+                    </td>
                     <td><button type="button" class="button wcpif-remove-rule">Remove</button></td>
                 `;
                 tableBody.appendChild(row);
@@ -940,17 +964,10 @@ class WC_Product_Image_Filters {
 
             $selectors = [];
             foreach ($ids as $id) {
-                $selectors[] = ".post-{$id} img.wp-post-image";
-                $selectors[] = ".product.post-{$id} img";
-                $selectors[] = ".woocommerce ul.products li.post-{$id} img";
-                $selectors[] = ".woocommerce ul.products li.product.post-{$id} img";
-                $selectors[] = "body.single-product.postid-{$id} .woocommerce-product-gallery img";
-                $selectors[] = ".wc-block-grid__product.post-{$id} img";
-                $selectors[] = ".wc-block-grid__product[data-product-id=\"{$id}\"] img";
-                $selectors[] = ".wc-block-product.post-{$id} img";
-                $selectors[] = ".wc-block-product[data-wc-product-id=\"{$id}\"] img";
-                $selectors[] = "[data-product-id=\"{$id}\"] img";
-                $selectors[] = "[data-wc-product-id=\"{$id}\"] img";
+                $selectors = array_merge(
+                    $selectors,
+                    $this->get_product_image_selectors($id, $this->is_main_image_only_rule($rule))
+                );
             }
 
             echo implode(",\n", $selectors);
@@ -978,6 +995,43 @@ class WC_Product_Image_Filters {
         return $this->apply_filter_to_image_html($html, $post_id);
     }
 
+    private function is_main_image_only_rule($rule) {
+        return is_array($rule) && !empty($rule['main_image_only']);
+    }
+
+    private function get_product_image_selectors($product_id, $main_image_only = false) {
+        $id = absint($product_id);
+
+        if ($main_image_only) {
+            return [
+                ".post-{$id} img.wp-post-image",
+                ".product.post-{$id} img.wp-post-image",
+                ".woocommerce ul.products li.post-{$id} img",
+                ".woocommerce ul.products li.product.post-{$id} img",
+                "body.single-product.postid-{$id} .woocommerce-product-gallery img.wp-post-image",
+                "body.single-product.postid-{$id} .woocommerce-product-gallery .woocommerce-product-gallery__image:first-child img",
+                ".wc-block-grid__product.post-{$id} img",
+                ".wc-block-grid__product[data-product-id=\"{$id}\"] img",
+                ".wc-block-product.post-{$id} img",
+                ".wc-block-product[data-wc-product-id=\"{$id}\"] img",
+            ];
+        }
+
+        return [
+            ".post-{$id} img.wp-post-image",
+            ".product.post-{$id} img",
+            ".woocommerce ul.products li.post-{$id} img",
+            ".woocommerce ul.products li.product.post-{$id} img",
+            "body.single-product.postid-{$id} .woocommerce-product-gallery img",
+            ".wc-block-grid__product.post-{$id} img",
+            ".wc-block-grid__product[data-product-id=\"{$id}\"] img",
+            ".wc-block-product.post-{$id} img",
+            ".wc-block-product[data-wc-product-id=\"{$id}\"] img",
+            "[data-product-id=\"{$id}\"] img",
+            "[data-wc-product-id=\"{$id}\"] img",
+        ];
+    }
+
     private function apply_filter_to_image_html($html, $product_id) {
         $rule = $this->get_rule_for_product($product_id);
         if (!$rule) {
@@ -987,6 +1041,7 @@ class WC_Product_Image_Filters {
         $filter = $this->build_filter_value($rule);
         $product_class = 'wcpif-product-' . absint($product_id);
         $class = 'wcpif-filtered-image ' . $product_class;
+        $main_image_only = $this->is_main_image_only_rule($rule);
 
         if (class_exists('WP_HTML_Tag_Processor')) {
             $processor = new WP_HTML_Tag_Processor($html);
@@ -995,6 +1050,10 @@ class WC_Product_Image_Filters {
                 $processor->add_class($product_class);
                 $style = (string) $processor->get_attribute('style');
                 $processor->set_attribute('style', trim($style . '; filter: ' . $filter . ' !important;', '; '));
+
+                if ($main_image_only) {
+                    break;
+                }
             }
             return $processor->get_updated_html();
         }
@@ -1015,7 +1074,7 @@ class WC_Product_Image_Filters {
             }
 
             return $tag;
-        }, $html);
+        }, $html, $main_image_only ? 1 : -1);
     }
 
     private function get_rule_for_product($product_id) {

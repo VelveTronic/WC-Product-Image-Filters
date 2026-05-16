@@ -13,6 +13,7 @@ It lets store managers select products from a visual admin panel, adjust image f
 - Live admin preview while editing filter values
 - Supports brightness, contrast, saturation, grayscale, and blur
 - Frontend support for product archives and single product galleries
+- Optional per-rule scope to filter only the main product image and skip gallery images
 - Additional compatibility selectors for WooCommerce blocks and theme product cards
 - Safe value sanitization, including comma decimal input such as `1,05`
 
@@ -41,8 +42,9 @@ It lets store managers select products from a visual admin panel, adjust image f
    - **Saturate**
    - **Grayscale**
    - **Blur**
-5. Review the live preview.
-6. Save the filters.
+5. Enable **Main image only** when the filter should skip the single product gallery images.
+6. Review the live preview.
+7. Save the filters.
 
 The selected products will keep the configured image filter effect on supported frontend views.
 
@@ -63,7 +65,7 @@ This combination improves compatibility with classic WooCommerce templates, sing
 
 ## Version
 
-Current version: `2.0.3`
+Current version: `2.1.2`
 
 ## Author
 
