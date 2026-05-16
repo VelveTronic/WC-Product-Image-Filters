@@ -1,0 +1,6 @@
+build/
+verify/
+release/
+*.zip
+.DS_Store
+Thumbs.db
