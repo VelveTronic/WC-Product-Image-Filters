@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WC Product Image Filters
  * Description: Add fixed CSS filters to selected WooCommerce product images with an Ajax product selector and live admin preview.
- * Version: 2.1.2
+ * Version: 2.1.3
  * Author: VelveTronic
  * Text Domain: wc-product-image-filters
  */

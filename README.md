@@ -48,6 +48,14 @@ It lets store managers select products from a visual admin panel, adjust image f
 
 The selected products will keep the configured image filter effect on supported frontend views.
 
+## Manual Upgrade Notes
+
+WordPress matches manually uploaded plugin zips by the installed plugin folder, not only by the plugin name.
+
+If the plugin was installed from GitHub's **Download ZIP** source archive, the active folder may be named `WC-Product-Image-Filters-main`. Upgrade with GitHub's **Download ZIP** from the same branch, or use a package whose top-level folder is also `WC-Product-Image-Filters-main`, so WordPress recognizes the upload as an upgrade and offers to replace the existing plugin.
+
+If WordPress already created a duplicate inactive copy, delete the inactive duplicate first, then upload the matching zip again.
+
 ## Recommended Values
 
 - Bright commercial look: `brightness 1.12`, `contrast 1.06`, `saturate 1.05`
@@ -65,7 +73,7 @@ This combination improves compatibility with classic WooCommerce templates, sing
 
 ## Version
 
-Current version: `2.1.2`
+Current version: `2.1.3`
 
 ## Author
 
