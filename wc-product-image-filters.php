@@ -88,6 +88,10 @@ class WC_Product_Image_Filters {
             ];
         }
 
+        // Bust cached category→product ID mappings so output_filter_css picks up changes.
+        global $wpdb;
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_wcpif_cat_pids_%' OR option_name LIKE '_transient_timeout_wcpif_cat_pids_%'");
+
         return $rules;
     }
 
@@ -178,26 +182,32 @@ class WC_Product_Image_Filters {
         ];
     }
 
-    public function render_settings_page() {
-        if (!current_user_can('manage_woocommerce')) {
-            return;
-        }
-
+    private function get_rules_for_display() {
         $rules = get_option(self::OPTION_KEY, []);
         $rules = is_array($rules) ? array_values(array_filter($rules, 'is_array')) : [];
 
         if (empty($rules)) {
             $rules = [[
-                'product_ids' => '',
-                'category_ids' => '',
-                'brightness' => 1.1,
-                'contrast' => 1.05,
-                'saturate' => 1,
-                'grayscale' => 0,
-                'blur' => 0,
+                'product_ids'     => '',
+                'category_ids'    => '',
+                'brightness'      => 1.1,
+                'contrast'        => 1.05,
+                'saturate'        => 1,
+                'grayscale'       => 0,
+                'blur'            => 0,
                 'main_image_only' => 0,
             ]];
         }
+
+        return $rules;
+    }
+
+    public function render_settings_page() {
+        if (!current_user_can('manage_woocommerce')) {
+            return;
+        }
+
+        $rules = $this->get_rules_for_display();
         ?>
         <div class="wrap">
             <h1>WooCommerce Product Image Filters</h1>
@@ -210,72 +220,18 @@ class WC_Product_Image_Filters {
                     <thead>
                         <tr>
                             <th style="width: 34%;">Products / Categories</th>
-                            <th style="width: 140px;">Live Preview</th>
+                            <th style="width: 160px;">Live Preview</th>
                             <th>Brightness</th>
                             <th>Contrast</th>
                             <th>Saturate</th>
                             <th>Grayscale</th>
                             <th>Blur px</th>
-                            <th style="width: 150px;">Scope</th>
                             <th style="width: 80px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($rules as $index => $rule): ?>
-                            <tr>
-                                <td>
-                                    <div class="wcpif-product-control" data-placeholder="Search product name or enter Product ID">
-                                        <input type="hidden" class="wcpif-product-ids" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][product_ids]" value="<?php echo esc_attr($rule['product_ids'] ?? ''); ?>" />
-                                        <div class="wcpif-selected-products" data-placeholder="No products selected yet">
-                                        <?php foreach ($this->get_rule_ids($rule, 'product_ids') as $product_id): ?>
-                                            <span class="wcpif-product-chip" data-id="<?php echo esc_attr($product_id); ?>">
-                                                <?php echo esc_html($this->get_product_label($product_id)); ?>
-                                                <button type="button" class="wcpif-remove-product" aria-label="Remove product">&times;</button>
-                                            </span>
-                                        <?php endforeach; ?>
-                                        </div>
-                                        <input type="text" class="wcpif-product-search" placeholder="Search product name or enter Product ID" autocomplete="off" />
-                                        <div class="wcpif-product-results" hidden></div>
-                                    </div>
-                                    <div class="wcpif-category-control" data-placeholder="No categories selected yet">
-                                        <input type="hidden" class="wcpif-category-ids" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][category_ids]" value="<?php echo esc_attr($rule['category_ids'] ?? ''); ?>" />
-                                        <div class="wcpif-selected-categories" data-placeholder="No categories selected yet">
-                                        <?php foreach ($this->get_rule_ids($rule, 'category_ids') as $category_id):
-                                            $term = get_term($category_id, 'product_cat');
-                                            if (!$term || is_wp_error($term)) {
-                                                continue;
-                                            }
-                                        ?>
-                                            <span class="wcpif-category-chip" data-id="<?php echo esc_attr($category_id); ?>">
-                                                <?php echo esc_html($term->name . " (#{$term->term_id})"); ?>
-                                                <button type="button" class="wcpif-remove-category" aria-label="Remove category">&times;</button>
-                                            </span>
-                                        <?php endforeach; ?>
-                                        </div>
-                                        <input type="text" class="wcpif-category-search" placeholder="Search product category" autocomplete="off" />
-                                        <div class="wcpif-category-results" hidden></div>
-                                    </div>
-                                    <p class="description">Search by product name/SKU/ID, and/or select product categories.</p>
-                                </td>
-                                <td>
-                                    <div class="wcpif-preview" aria-live="polite">
-                                        <img src="<?php echo esc_url(wc_placeholder_img_src('woocommerce_thumbnail')); ?>" alt="" />
-                                    </div>
-                                </td>
-                                <td><input type="number" step="0.01" min="0" max="3" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][brightness]" value="<?php echo esc_attr($rule['brightness'] ?? 1); ?>" /></td>
-                                <td><input type="number" step="0.01" min="0" max="3" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][contrast]" value="<?php echo esc_attr($rule['contrast'] ?? 1); ?>" /></td>
-                                <td><input type="number" step="0.01" min="0" max="3" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][saturate]" value="<?php echo esc_attr($rule['saturate'] ?? 1); ?>" /></td>
-                                <td><input type="number" step="0.01" min="0" max="1" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][grayscale]" value="<?php echo esc_attr($rule['grayscale'] ?? 0); ?>" /></td>
-                                <td><input type="number" step="0.1" min="0" max="20" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][blur]" value="<?php echo esc_attr($rule['blur'] ?? 0); ?>" /></td>
-                                <td>
-                                    <label class="wcpif-checkbox-label">
-                                        <input type="checkbox" name="<?php echo esc_attr(self::OPTION_KEY); ?>[<?php echo esc_attr($index); ?>][main_image_only]" value="1" <?php checked(!empty($rule['main_image_only'])); ?> />
-                                        Main image only
-                                    </label>
-                                    <p class="description">Skip single product gallery images.</p>
-                                </td>
-                                <td><button type="button" class="button wcpif-remove-rule">Remove</button></td>
-                            </tr>
+                            <?php $this->render_rule_row($index, $rule); ?>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -291,9 +247,73 @@ class WC_Product_Image_Filters {
             <h2>Recommended values</h2>
             <p><strong>Bright commercial look:</strong> brightness 1.12, contrast 1.06, saturate 1.05</p>
             <p><strong>Luxury soft look:</strong> brightness 1.06, contrast 1.08, saturate 0.9</p>
-            <p><strong>Black & white:</strong> grayscale 1</p>
+            <p><strong>Black &amp; white:</strong> grayscale 1</p>
         </div>
+        <?php
+        $this->render_admin_css();
+        $this->render_admin_script();
+    }
 
+    private function render_rule_row($index, $rule) {
+        $k = esc_attr(self::OPTION_KEY);
+        $i = esc_attr($index);
+        ?>
+        <tr>
+            <td>
+                <div class="wcpif-product-control" data-placeholder="Search product name or enter Product ID">
+                    <input type="hidden" class="wcpif-product-ids" name="<?php echo $k; ?>[<?php echo $i; ?>][product_ids]" value="<?php echo esc_attr($rule['product_ids'] ?? ''); ?>" />
+                    <div class="wcpif-selected-products" data-placeholder="No products selected yet">
+                    <?php foreach ($this->get_rule_ids($rule, 'product_ids') as $product_id): ?>
+                        <span class="wcpif-product-chip" data-id="<?php echo esc_attr($product_id); ?>">
+                            <?php echo esc_html($this->get_product_label($product_id)); ?>
+                            <button type="button" class="wcpif-remove-product" aria-label="Remove product">&times;</button>
+                        </span>
+                    <?php endforeach; ?>
+                    </div>
+                    <input type="text" class="wcpif-product-search" placeholder="Search product name or enter Product ID" autocomplete="off" />
+                    <div class="wcpif-product-results" hidden></div>
+                </div>
+                <div class="wcpif-category-control" data-placeholder="No categories selected yet">
+                    <input type="hidden" class="wcpif-category-ids" name="<?php echo $k; ?>[<?php echo $i; ?>][category_ids]" value="<?php echo esc_attr($rule['category_ids'] ?? ''); ?>" />
+                    <div class="wcpif-selected-categories" data-placeholder="No categories selected yet">
+                    <?php foreach ($this->get_rule_ids($rule, 'category_ids') as $category_id):
+                        $term = get_term($category_id, 'product_cat');
+                        if (!$term || is_wp_error($term)) {
+                            continue;
+                        }
+                    ?>
+                        <span class="wcpif-category-chip" data-id="<?php echo esc_attr($category_id); ?>">
+                            <?php echo esc_html($term->name . " (#{$term->term_id})"); ?>
+                            <button type="button" class="wcpif-remove-category" aria-label="Remove category">&times;</button>
+                        </span>
+                    <?php endforeach; ?>
+                    </div>
+                    <input type="text" class="wcpif-category-search" placeholder="Search product category" autocomplete="off" />
+                    <div class="wcpif-category-results" hidden></div>
+                </div>
+                <p class="description">Search by product name/SKU/ID, and/or select product categories.</p>
+            </td>
+            <td>
+                <div class="wcpif-preview" aria-live="polite">
+                    <img src="<?php echo esc_url(wc_placeholder_img_src('woocommerce_thumbnail')); ?>" alt="" />
+                </div>
+                <label class="wcpif-scope-toggle" title="Apply filter to main product image only, skipping single product gallery images.">
+                    <input type="checkbox" name="<?php echo $k; ?>[<?php echo $i; ?>][main_image_only]" value="1" <?php checked(!empty($rule['main_image_only'])); ?> />
+                    Main image only
+                </label>
+            </td>
+            <td><input type="number" step="0.01" min="0" max="3" name="<?php echo $k; ?>[<?php echo $i; ?>][brightness]" value="<?php echo esc_attr($rule['brightness'] ?? 1); ?>" /></td>
+            <td><input type="number" step="0.01" min="0" max="3" name="<?php echo $k; ?>[<?php echo $i; ?>][contrast]" value="<?php echo esc_attr($rule['contrast'] ?? 1); ?>" /></td>
+            <td><input type="number" step="0.01" min="0" max="3" name="<?php echo $k; ?>[<?php echo $i; ?>][saturate]" value="<?php echo esc_attr($rule['saturate'] ?? 1); ?>" /></td>
+            <td><input type="number" step="0.01" min="0" max="1" name="<?php echo $k; ?>[<?php echo $i; ?>][grayscale]" value="<?php echo esc_attr($rule['grayscale'] ?? 0); ?>" /></td>
+            <td><input type="number" step="0.1" min="0" max="20" name="<?php echo $k; ?>[<?php echo $i; ?>][blur]" value="<?php echo esc_attr($rule['blur'] ?? 0); ?>" /></td>
+            <td><button type="button" class="button wcpif-remove-rule">Remove</button></td>
+        </tr>
+        <?php
+    }
+
+    private function render_admin_css() {
+        ?>
         <style>
             .woocommerce_page_wc-product-image-filters .wrap {
                 max-width: 100%;
@@ -317,11 +337,19 @@ class WC_Product_Image_Filters {
                 width: 100px;
             }
 
-            .wcpif-checkbox-label {
+            .wcpif-scope-toggle {
                 display: flex;
-                align-items: center;
-                gap: 6px;
-                margin-top: 4px;
+                align-items: flex-start;
+                gap: 5px;
+                margin-top: 8px;
+                font-size: 12px;
+                color: #50575e;
+                cursor: pointer;
+            }
+
+            .wcpif-scope-toggle input[type="checkbox"] {
+                margin-top: 2px;
+                flex-shrink: 0;
             }
 
             .wcpif-product-control,
@@ -469,7 +497,11 @@ class WC_Product_Image_Filters {
                 object-fit: cover;
             }
         </style>
+        <?php
+    }
 
+    private function render_admin_script() {
+        ?>
         <script>
         (function($){
             const tableBody = document.querySelector('#wcpif-rules-table tbody');
@@ -477,6 +509,7 @@ class WC_Product_Image_Filters {
             const optionKey = '<?php echo esc_js(self::OPTION_KEY); ?>';
             const ajaxUrl = '<?php echo esc_url(admin_url('admin-ajax.php')); ?>';
             const nonce = '<?php echo esc_js(wp_create_nonce(self::AJAX_NONCE)); ?>';
+            const SEARCH_DEBOUNCE_MS = 250;
 
             function getIndex() {
                 return tableBody.querySelectorAll('tr').length + Date.now();
@@ -524,6 +557,8 @@ class WC_Product_Image_Filters {
                         image.src = response.data.image;
                     }
                     updatePreview(row);
+                }).fail(function() {
+                    updatePreview(row);
                 });
             }
 
@@ -534,158 +569,85 @@ class WC_Product_Image_Filters {
                     .filter(Boolean);
             }
 
-            function syncProductIds(control) {
-                const row = control.closest('tr');
-                const hidden = control.querySelector('.wcpif-product-ids');
-                const ids = Array.from(control.querySelectorAll('.wcpif-product-chip'))
+            function closeResults(control, type) {
+                const results = control.querySelector(`.wcpif-${type}-results`);
+                results.hidden = true;
+                results.innerHTML = '';
+            }
+
+            function syncIds(control, type) {
+                const hidden = control.querySelector(`.wcpif-${type}-ids`);
+                const ids = Array.from(control.querySelectorAll(`.wcpif-${type}-chip`))
                     .map(chip => chip.dataset.id)
                     .filter(Boolean);
-
                 hidden.value = Array.from(new Set(ids)).join(',');
                 control.classList.toggle('is-empty', ids.length === 0);
-                loadPreviewImage(row);
+                if (type === 'product') loadPreviewImage(control.closest('tr'));
             }
 
-            function closeProductResults(control) {
-                const results = control.querySelector('.wcpif-product-results');
-                results.hidden = true;
-                results.innerHTML = '';
-            }
-
-            function renderProductResults(control, products, term) {
-                const results = control.querySelector('.wcpif-product-results');
-                const selected = new Set(Array.from(control.querySelectorAll('.wcpif-product-chip')).map(chip => chip.dataset.id));
-                const items = (products || []).filter(product => !selected.has(String(product.id)));
+            function renderResults(control, type, items, term) {
+                const results = control.querySelector(`.wcpif-${type}-results`);
+                const selected = new Set(
+                    Array.from(control.querySelectorAll(`.wcpif-${type}-chip`)).map(c => c.dataset.id)
+                );
+                let filtered = (items || []).filter(item => !selected.has(String(item.id)));
 
                 results.innerHTML = '';
 
-                if (!items.length && /^\d+$/.test(term)) {
-                    items.push({ id: term, text: `Product ID #${term}` });
+                if (!filtered.length && type === 'product' && /^\d+$/.test(term)) {
+                    filtered = [{ id: term, text: `Product ID #${term}` }];
                 }
 
-                if (!items.length) {
+                if (!filtered.length) {
                     const empty = document.createElement('div');
-                    empty.className = 'wcpif-product-result is-empty';
-                    empty.textContent = term ? 'No products found' : 'Please enter 1 or more characters';
+                    empty.className = `wcpif-${type}-result is-empty`;
+                    empty.textContent = term ? `No ${type}s found` : 'Please enter 1 or more characters';
                     results.appendChild(empty);
                     results.hidden = false;
                     return;
                 }
 
-                items.forEach(function(product) {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'wcpif-product-result';
-                    button.dataset.id = product.id;
-                    button.dataset.text = product.text;
-                    button.textContent = product.text;
-                    results.appendChild(button);
-                });
-
-                results.hidden = false;
-            }
-
-            function addProduct(control, id, text) {
-                if (!id || control.querySelector(`.wcpif-product-chip[data-id="${CSS.escape(String(id))}"]`)) {
-                    return;
-                }
-
-                const chip = document.createElement('span');
-                chip.className = 'wcpif-product-chip';
-                chip.dataset.id = id;
-                chip.append(document.createTextNode(text || `Product ID #${id}`));
-
-                const remove = document.createElement('button');
-                remove.type = 'button';
-                remove.className = 'wcpif-remove-product';
-                remove.setAttribute('aria-label', 'Remove product');
-                remove.innerHTML = '&times;';
-                chip.append(remove);
-
-                control.querySelector('.wcpif-selected-products').appendChild(chip);
-                control.querySelector('.wcpif-product-search').value = '';
-                closeProductResults(control);
-                syncProductIds(control);
-            }
-
-
-            function syncCategoryIds(control) {
-                const hidden = control.querySelector('.wcpif-category-ids');
-                const ids = Array.from(control.querySelectorAll('.wcpif-category-chip')).map(chip => chip.dataset.id).filter(Boolean);
-                hidden.value = Array.from(new Set(ids)).join(',');
-                control.classList.toggle('is-empty', ids.length === 0);
-            }
-
-            function closeCategoryResults(control) {
-                const results = control.querySelector('.wcpif-category-results');
-                results.hidden = true;
-                results.innerHTML = '';
-            }
-
-            function renderCategoryResults(control, categories, term) {
-                const results = control.querySelector('.wcpif-category-results');
-                const selected = new Set(Array.from(control.querySelectorAll('.wcpif-category-chip')).map(chip => chip.dataset.id));
-                const items = (categories || []).filter(category => !selected.has(String(category.id)));
-                results.innerHTML = '';
-                if (!items.length) {
-                    const empty = document.createElement('div');
-                    empty.className = 'wcpif-category-result is-empty';
-                    empty.textContent = term ? 'No categories found' : 'Please enter 1 or more characters';
-                    results.appendChild(empty);
-                    results.hidden = false;
-                    return;
-                }
-                items.forEach(function(category) {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = 'wcpif-category-result';
-                    button.dataset.id = category.id;
-                    button.dataset.text = category.text;
-                    button.textContent = category.text;
-                    results.appendChild(button);
+                filtered.forEach(function(item) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = `wcpif-${type}-result`;
+                    btn.dataset.id = item.id;
+                    btn.dataset.text = item.text;
+                    btn.textContent = item.text;
+                    results.appendChild(btn);
                 });
                 results.hidden = false;
             }
 
-            function addCategory(control, id, text) {
-                if (!id || control.querySelector(`.wcpif-category-chip[data-id="${CSS.escape(String(id))}"]`)) {
+            function addItem(control, type, id, text) {
+                if (!id || control.querySelector(`.wcpif-${type}-chip[data-id="${CSS.escape(String(id))}"]`)) {
                     return;
                 }
+
                 const chip = document.createElement('span');
-                chip.className = 'wcpif-category-chip';
+                chip.className = `wcpif-${type}-chip`;
                 chip.dataset.id = id;
-                chip.append(document.createTextNode(text));
+                chip.append(document.createTextNode(text || (type === 'product' ? `Product ID #${id}` : id)));
+
                 const remove = document.createElement('button');
                 remove.type = 'button';
-                remove.className = 'wcpif-remove-category';
-                remove.setAttribute('aria-label', 'Remove category');
+                remove.className = `wcpif-remove-${type}`;
+                remove.setAttribute('aria-label', `Remove ${type}`);
                 remove.innerHTML = '&times;';
                 chip.append(remove);
-                control.querySelector('.wcpif-selected-categories').appendChild(chip);
-                control.querySelector('.wcpif-category-search').value = '';
-                closeCategoryResults(control);
-                syncCategoryIds(control);
+
+                control.querySelector(`.wcpif-selected-${type}s`).appendChild(chip);
+                control.querySelector(`.wcpif-${type}-search`).value = '';
+                closeResults(control, type);
+                syncIds(control, type);
             }
 
-            function initCategorySearch(context) {
-                const controls = (context || document).querySelectorAll('.wcpif-category-control');
-                controls.forEach(function(control) {
+            function initSearch(context, type) {
+                (context || document).querySelectorAll(`.wcpif-${type}-control`).forEach(function(control) {
                     if (control.dataset.wcpifReady) return;
                     control.dataset.wcpifReady = '1';
-                    control.classList.toggle('is-empty', !control.querySelector('.wcpif-category-chip'));
-                });
-            }
-
-            function initProductSearch(context) {
-                const controls = (context || document).querySelectorAll('.wcpif-product-control');
-                controls.forEach(function(control) {
-                    if (control.dataset.wcpifReady) {
-                        return;
-                    }
-
-                    control.dataset.wcpifReady = '1';
-                    control.classList.toggle('is-empty', !control.querySelector('.wcpif-product-chip'));
-                    loadPreviewImage(control.closest('tr'));
+                    control.classList.toggle('is-empty', !control.querySelector(`.wcpif-${type}-chip`));
+                    if (type === 'product') loadPreviewImage(control.closest('tr'));
                 });
             }
 
@@ -708,24 +670,23 @@ class WC_Product_Image_Filters {
                         </div>
                         <p class="description">Search by product name/SKU/ID, and/or select product categories.</p>
                     </td>
-                    <td><div class="wcpif-preview" aria-live="polite"><img src="<?php echo esc_js(wc_placeholder_img_src('woocommerce_thumbnail')); ?>" alt="" /></div></td>
+                    <td>
+                        <div class="wcpif-preview" aria-live="polite"><img src="<?php echo esc_js(wc_placeholder_img_src('woocommerce_thumbnail')); ?>" alt="" /></div>
+                        <label class="wcpif-scope-toggle" title="Apply filter to main product image only, skipping single product gallery images.">
+                            <input type="checkbox" name="${optionKey}[${i}][main_image_only]" value="1" />
+                            Main image only
+                        </label>
+                    </td>
                     <td><input type="number" step="0.01" min="0" max="3" name="${optionKey}[${i}][brightness]" value="1.1" /></td>
                     <td><input type="number" step="0.01" min="0" max="3" name="${optionKey}[${i}][contrast]" value="1.05" /></td>
                     <td><input type="number" step="0.01" min="0" max="3" name="${optionKey}[${i}][saturate]" value="1" /></td>
                     <td><input type="number" step="0.01" min="0" max="1" name="${optionKey}[${i}][grayscale]" value="0" /></td>
                     <td><input type="number" step="0.1" min="0" max="20" name="${optionKey}[${i}][blur]" value="0" /></td>
-                    <td>
-                        <label class="wcpif-checkbox-label">
-                            <input type="checkbox" name="${optionKey}[${i}][main_image_only]" value="1" />
-                            Main image only
-                        </label>
-                        <p class="description">Skip single product gallery images.</p>
-                    </td>
                     <td><button type="button" class="button wcpif-remove-rule">Remove</button></td>
                 `;
                 tableBody.appendChild(row);
-                initProductSearch(row);
-                initCategorySearch(row);
+                initSearch(row, 'product');
+                initSearch(row, 'category');
                 updatePreview(row);
             });
 
@@ -740,31 +701,30 @@ class WC_Product_Image_Filters {
                 if (e.target.classList.contains('wcpif-remove-product')) {
                     const control = e.target.closest('.wcpif-product-control');
                     e.target.closest('.wcpif-product-chip').remove();
-                    syncProductIds(control);
+                    syncIds(control, 'product');
                 }
 
                 if (e.target.classList.contains('wcpif-remove-category')) {
                     const control = e.target.closest('.wcpif-category-control');
                     e.target.closest('.wcpif-category-chip').remove();
-                    syncCategoryIds(control);
+                    syncIds(control, 'category');
                 }
 
                 if (e.target.classList.contains('wcpif-product-result') && !e.target.classList.contains('is-empty')) {
-                    addProduct(e.target.closest('.wcpif-product-control'), e.target.dataset.id, e.target.dataset.text);
+                    addItem(e.target.closest('.wcpif-product-control'), 'product', e.target.dataset.id, e.target.dataset.text);
                 }
 
                 if (e.target.classList.contains('wcpif-category-result') && !e.target.classList.contains('is-empty')) {
-                    addCategory(e.target.closest('.wcpif-category-control'), e.target.dataset.id, e.target.dataset.text);
+                    addItem(e.target.closest('.wcpif-category-control'), 'category', e.target.dataset.id, e.target.dataset.text);
                 }
 
                 if (!e.target.closest('.wcpif-product-control')) {
-                    document.querySelectorAll('.wcpif-product-control').forEach(closeProductResults);
+                    document.querySelectorAll('.wcpif-product-control').forEach(c => closeResults(c, 'product'));
                 }
 
                 if (!e.target.closest('.wcpif-category-control')) {
-                    document.querySelectorAll('.wcpif-category-control').forEach(closeCategoryResults);
+                    document.querySelectorAll('.wcpif-category-control').forEach(c => closeResults(c, 'category'));
                 }
-
             });
 
             document.addEventListener('input', function(e) {
@@ -777,7 +737,7 @@ class WC_Product_Image_Filters {
                     const term = e.target.value.trim();
 
                     if (!term) {
-                        renderProductResults(control, [], term);
+                        renderResults(control, 'product', [], term);
                         return;
                     }
 
@@ -788,9 +748,11 @@ class WC_Product_Image_Filters {
                             nonce: nonce,
                             term: term
                         }).done(function(response) {
-                            renderProductResults(control, response && response.success ? response.data.results : [], term);
+                            renderResults(control, 'product', response && response.success ? response.data.results : [], term);
+                        }).fail(function() {
+                            renderResults(control, 'product', [], term);
                         });
-                    }, 250);
+                    }, SEARCH_DEBOUNCE_MS);
                 }
 
                 if (e.target.classList.contains('wcpif-category-search')) {
@@ -798,16 +760,19 @@ class WC_Product_Image_Filters {
                     const term = e.target.value.trim();
 
                     if (!term) {
-                        renderCategoryResults(control, [], term);
+                        renderResults(control, 'category', [], term);
                         return;
                     }
 
                     window.clearTimeout(control.wcpifSearchTimer);
                     control.wcpifSearchTimer = window.setTimeout(function() {
-                        $.get(ajaxUrl, { action: 'wcpif_search_categories', nonce: nonce, term: term }).done(function(response) {
-                            renderCategoryResults(control, response && response.success ? response.data.results : [], term);
-                        });
-                    }, 250);
+                        $.get(ajaxUrl, { action: 'wcpif_search_categories', nonce: nonce, term: term })
+                            .done(function(response) {
+                                renderResults(control, 'category', response && response.success ? response.data.results : [], term);
+                            }).fail(function() {
+                                renderResults(control, 'category', [], term);
+                            });
+                    }, SEARCH_DEBOUNCE_MS);
                 }
             });
 
@@ -822,14 +787,14 @@ class WC_Product_Image_Filters {
                 const term = e.target.value.trim();
 
                 if (first) {
-                    addProduct(control, first.dataset.id, first.dataset.text);
+                    addItem(control, 'product', first.dataset.id, first.dataset.text);
                 } else if (/^\d+$/.test(term)) {
-                    addProduct(control, term, `Product ID #${term}`);
+                    addItem(control, 'product', term, `Product ID #${term}`);
                 }
             });
 
-            initProductSearch(document);
-            initCategorySearch(document);
+            initSearch(document, 'product');
+            initSearch(document, 'category');
             tableBody.querySelectorAll('tr').forEach(updatePreview);
         })(jQuery);
         </script>
@@ -946,37 +911,73 @@ class WC_Product_Image_Filters {
             return;
         }
 
-        echo "\n<style id='wcpif-dynamic-css'>\n";
+        $css_blocks = [];
 
         foreach ($rules as $rule) {
             if (!is_array($rule)) {
                 continue;
             }
 
-            if (empty($rule['product_ids'])) {
-                continue;
+            $product_ids  = $this->get_rule_ids($rule, 'product_ids');
+            $category_ids = $this->get_rule_ids($rule, 'category_ids');
+
+            if (!empty($category_ids)) {
+                $product_ids = array_values(array_unique(array_merge(
+                    $product_ids,
+                    $this->get_product_ids_by_category_ids($category_ids)
+                )));
             }
 
-            $ids = $this->get_rule_ids($rule, 'product_ids');
-            if (empty($ids)) {
+            if (empty($product_ids)) {
                 continue;
             }
 
             $selectors = [];
-            foreach ($ids as $id) {
+            $main_only = $this->is_main_image_only_rule($rule);
+            foreach ($product_ids as $id) {
                 $selectors = array_merge(
                     $selectors,
-                    $this->get_product_image_selectors($id, $this->is_main_image_only_rule($rule))
+                    $this->get_product_image_selectors($id, $main_only)
                 );
             }
 
-            echo implode(",\n", $selectors);
-            echo " {\n";
-            echo "  filter: " . esc_html($this->build_filter_value($rule)) . " !important;\n";
-            echo "}\n";
+            $css_blocks[] = implode(",\n", $selectors)
+                . " {\n  filter: " . esc_html($this->build_filter_value($rule)) . " !important;\n}";
         }
 
-        echo "</style>\n";
+        if (!empty($css_blocks)) {
+            echo "\n<style id='wcpif-dynamic-css'>\n" . implode("\n", $css_blocks) . "\n</style>\n";
+        }
+    }
+
+    private function get_product_ids_by_category_ids(array $category_ids) {
+        if (empty($category_ids)) {
+            return [];
+        }
+
+        sort($category_ids);
+        $cache_key = 'wcpif_cat_pids_' . md5(implode(',', $category_ids));
+        $cached = get_transient($cache_key);
+        if (false !== $cached) {
+            return $cached;
+        }
+
+        $query = new WP_Query([
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'tax_query'      => [[
+                'taxonomy' => 'product_cat',
+                'field'    => 'term_id',
+                'terms'    => $category_ids,
+            ]],
+        ]);
+
+        $ids = array_map('absint', $query->posts);
+        set_transient($cache_key, $ids, HOUR_IN_SECONDS);
+        return $ids;
     }
 
     public function filter_product_image_html($html, $product, $size = null, $attr = [], $placeholder = true, $image = null) {
@@ -1038,43 +1039,50 @@ class WC_Product_Image_Filters {
             return $html;
         }
 
-        $filter = $this->build_filter_value($rule);
+        $filter        = $this->build_filter_value($rule);
         $product_class = 'wcpif-product-' . absint($product_id);
-        $class = 'wcpif-filtered-image ' . $product_class;
-        $main_image_only = $this->is_main_image_only_rule($rule);
+        $main_only     = $this->is_main_image_only_rule($rule);
 
         if (class_exists('WP_HTML_Tag_Processor')) {
-            $processor = new WP_HTML_Tag_Processor($html);
-            while ($processor->next_tag('img')) {
-                $processor->add_class('wcpif-filtered-image');
-                $processor->add_class($product_class);
-                $style = (string) $processor->get_attribute('style');
-                $processor->set_attribute('style', trim($style . '; filter: ' . $filter . ' !important;', '; '));
-
-                if ($main_image_only) {
-                    break;
-                }
-            }
-            return $processor->get_updated_html();
+            return $this->apply_filter_via_html_processor($html, $filter, $product_class, $main_only);
         }
 
+        return $this->apply_filter_via_regex($html, $filter, $product_class, $main_only);
+    }
+
+    private function apply_filter_via_html_processor($html, $filter, $product_class, $main_only) {
+        $processor = new WP_HTML_Tag_Processor($html);
+        while ($processor->next_tag('img')) {
+            $processor->add_class('wcpif-filtered-image');
+            $processor->add_class($product_class);
+            $style = (string) $processor->get_attribute('style');
+            $processor->set_attribute('style', trim($style . '; filter: ' . $filter . ' !important;', '; '));
+            if ($main_only) {
+                break;
+            }
+        }
+        return $processor->get_updated_html();
+    }
+
+    private function apply_filter_via_regex($html, $filter, $product_class, $main_only) {
+        $class = 'wcpif-filtered-image ' . $product_class;
         return preg_replace_callback('/<img\b([^>]*)>/i', function($matches) use ($filter, $class) {
             $tag = $matches[0];
 
-            if (preg_match('/\bclass=("|\')(.*?)\1/i', $tag, $class_match)) {
+            if (preg_match('/\bclass=("|\')(.*?)\1/i', $tag)) {
                 $tag = preg_replace('/\bclass=("|\')(.*?)\1/i', 'class=$1$2 ' . esc_attr($class) . '$1', $tag, 1);
             } else {
                 $tag = preg_replace('/<img\b/i', '<img class="' . esc_attr($class) . '"', $tag, 1);
             }
 
-            if (preg_match('/\bstyle=("|\')(.*?)\1/i', $tag, $style_match)) {
+            if (preg_match('/\bstyle=("|\')(.*?)\1/i', $tag)) {
                 $tag = preg_replace('/\bstyle=("|\')(.*?)\1/i', 'style=$1$2; filter: ' . esc_attr($filter) . ' !important;$1', $tag, 1);
             } else {
                 $tag = preg_replace('/<img\b/i', '<img style="filter: ' . esc_attr($filter) . ' !important;"', $tag, 1);
             }
 
             return $tag;
-        }, $html, $main_image_only ? 1 : -1);
+        }, $html, $main_only ? 1 : -1);
     }
 
     private function get_rule_for_product($product_id) {
